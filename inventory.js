@@ -33,17 +33,19 @@ router.get("/inventory/:id", (req, res) => {
 
 // Add a new inventory item
 router.post("/inventory", (req, res) => {
-  const { item_name, quantity, unit_price } = req.body;
+  const { inventory_id,item_name, quantity, unit_price } = req.body;
+  console.log(req.body);
   const query =
-    "INSERT INTO inventory (item_name, quantity, unit_price) VALUES (?, ?, ?)";
-  db.query(query, [item_name, quantity, unit_price], (err, results) => {
+    "INSERT INTO inventory (inventory_id, item_name, quantity, unit_price) VALUES (?, ?, ?, ?)";
+  db.query(query, [inventory_id, item_name, quantity, unit_price], (err, results) => {
     if (err) {
       res.status(500).send(err);
     } else {
-      res.json({ id: results.insertId, item_name, quantity, unit_price });
+      res.json({ inventory_id, item_name, quantity, unit_price });
     }
   });
 });
+
 
 // Update an inventory item
 router.put("/inventory/:id", (req, res) => {
