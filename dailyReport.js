@@ -97,12 +97,50 @@ router.get("/daily-report/:date", async (req, res) => {
   }
 });
 
+// Endpoint to get the daily report by ID
+router.get("/daily-report/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Get detailed sales data for the specified report ID
+    const [reportData] = await db.promise().query(
+      `SELECT s.sale_id AS item_id, i.item_name, s.quantity_sold, s.total_price 
+       FROM sales s
+       JOIN inventory i ON s.inventory_id = i.inventory_id 
+       WHERE s.report_id = ?`,
+      [id]
+    );
+
+    // Get the summary totals for the specified report ID
+    const [dailyTotals] = await db
+      .promise()
+      .query(
+        "SELECT date, total_cost, total_items_sold FROM daily_report WHERE report_id = ?",
+        [id]
+      );
+
+    if (!dailyTotals.length) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    res.status(200).json({
+      reportId: id,
+      date: dailyTotals[0].date,
+      totalCost: dailyTotals[0].total_cost,
+      totalItemsSold: dailyTotals[0].total_items_sold,
+      itemsSold: reportData,
+    });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
 // Endpoint to get all daily reports with summary data for each day
 router.get("/daily-reports", async (req, res) => {
   try {
-    // Get all daily report summaries
+    // Get all daily report summaries, including report_id
     const [reports] = await db.promise().query(
-      `SELECT dr.date, dr.total_cost, dr.total_items_sold 
+      `SELECT dr.report_id, dr.date, dr.total_cost, dr.total_items_sold 
          FROM daily_report dr 
          ORDER BY dr.date DESC`
     );
@@ -112,15 +150,15 @@ router.get("/daily-reports", async (req, res) => {
 
     for (const report of reports) {
       const [itemsSold] = await db.promise().query(
-        `SELECT i.item_name, s.quantity_sold, s.total_price 
+        `SELECT s.sale_id AS item_id, i.item_name, s.quantity_sold, s.total_price 
            FROM sales s 
            JOIN inventory i ON s.inventory_id = i.inventory_id 
-           JOIN daily_report dr ON s.report_id = dr.report_id
-           WHERE dr.date = ?`,
-        [report.date]
+           WHERE s.report_id = ?`,
+        [report.report_id]
       );
 
       allReportDetails.push({
+        reportId: report.report_id,
         date: report.date,
         totalCost: report.total_cost,
         totalItemsSold: report.total_items_sold,
