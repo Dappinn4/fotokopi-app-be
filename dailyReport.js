@@ -135,7 +135,6 @@ router.get("/daily-report/:id", async (req, res) => {
   }
 });
 
-// Endpoint to get all daily reports with summary data for each day
 router.get("/daily-reports", async (req, res) => {
   try {
     // Get all daily report summaries, including report_id
@@ -150,19 +149,27 @@ router.get("/daily-reports", async (req, res) => {
 
     for (const report of reports) {
       const [itemsSold] = await db.promise().query(
-        `SELECT s.sale_id AS item_id, i.item_name, s.quantity_sold, s.total_price 
+        `SELECT i.item_name, s.quantity_sold, s.total_price 
            FROM sales s 
            JOIN inventory i ON s.inventory_id = i.inventory_id 
            WHERE s.report_id = ?`,
         [report.report_id]
       );
 
+      // Assign incremental item_id starting from 1 for each report
+      const itemsWithCustomIds = itemsSold.map((item, index) => ({
+        itemId: index + 1, // Incremental item_id starting from 1
+        itemName: item.item_name,
+        quantitySold: item.quantity_sold,
+        totalPrice: item.total_price,
+      }));
+
       allReportDetails.push({
         reportId: report.report_id,
         date: report.date,
         totalCost: report.total_cost,
         totalItemsSold: report.total_items_sold,
-        itemsSold: itemsSold,
+        itemsSold: itemsWithCustomIds,
       });
     }
 
