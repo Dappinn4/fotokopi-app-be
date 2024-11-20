@@ -98,13 +98,13 @@ router.get("/daily-report/:date", async (req, res) => {
 });
 
 // Endpoint to get the daily report by ID
-router.get("/daily-report/:id", async (req, res) => {
+router.get("/daily-reports/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
     // Get detailed sales data for the specified report ID
     const [reportData] = await db.promise().query(
-      `SELECT s.sale_id AS item_id, i.item_name, s.quantity_sold, s.total_price 
+      `SELECT s.sales_id AS item_id, i.item_name, s.quantity_sold, s.total_price 
        FROM sales s
        JOIN inventory i ON s.inventory_id = i.inventory_id 
        WHERE s.report_id = ?`,
