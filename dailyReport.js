@@ -5,24 +5,34 @@ const db = require("./db");
 // Endpoint to record daily sales and update inventory
 router.post("/daily-report", async (req, res) => {
   const { salesData, date } = req.body;
-  // `salesData` is an array of items sold with `inventory_id`, `quantity_sold`, and `price` per item.
 
   let totalItemsSold = 0;
   let totalSales = 0;
 
   try {
+    // Step 1: Insert the daily report to get the report_id
+    const [dailyReportResult] = await db
+      .promise()
+      .query(
+        "INSERT INTO daily_report (date, total_cost, total_items_sold) VALUES (?, ?, ?)",
+        [date, totalSales, totalItemsSold]
+      );
+
+    const report_id = dailyReportResult.insertId; // Get the generated report_id
+
+    // Step 2: Insert sales data with the generated report_id
     for (const sale of salesData) {
       const { inventory_id, quantity_sold, price } = sale;
       totalItemsSold += quantity_sold;
       const total_price = quantity_sold * price;
       totalSales += total_price;
 
-      // Insert the sale record
+      // Insert the sale record with the report_id
       await db
         .promise()
         .query(
           "INSERT INTO sales (report_id, inventory_id, quantity_sold, price, total_price) VALUES (?, ?, ?, ?, ?)",
-          [null, inventory_id, quantity_sold, price, total_price]
+          [report_id, inventory_id, quantity_sold, price, total_price]
         );
 
       // Reduce inventory stock
@@ -34,19 +44,23 @@ router.post("/daily-report", async (req, res) => {
         );
     }
 
-    // Insert into daily_report
+    // Step 3: Update the daily report with total cost and items sold
     await db
       .promise()
       .query(
-        "INSERT INTO daily_report (date, total_cost, total_items_sold) VALUES (?, ?, ?)",
-        [date, totalSales, totalItemsSold]
+        "UPDATE daily_report SET total_cost = ?, total_items_sold = ? WHERE report_id = ?",
+        [totalSales, totalItemsSold, report_id]
       );
 
     res.status(200).send({
       message: "Daily report created and inventory updated successfully",
     });
   } catch (error) {
-    res.status(500).send(error);
+    console.error("Error during daily report creation:", error);
+    res.status(500).send({
+      message: "Failed to record daily report",
+      error: error.message,
+    });
   }
 });
 
