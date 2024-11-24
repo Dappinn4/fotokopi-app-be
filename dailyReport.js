@@ -104,7 +104,7 @@ router.get("/daily-report/:id", async (req, res) => {
   try {
     // Get detailed sales data for the specified report ID
     const [reportData] = await db.promise().query(
-      `SELECT s.sale_id AS item_id, i.item_name, s.quantity_sold, s.total_price 
+      `SELECT s.sales_id AS item_id, i.item_name, s.quantity_sold, s.total_price 
        FROM sales s
        JOIN inventory i ON s.inventory_id = i.inventory_id 
        WHERE s.report_id = ?`,
@@ -176,6 +176,113 @@ router.get("/daily-reports", async (req, res) => {
     res.status(200).json(allReportDetails);
   } catch (error) {
     res.status(500).send(error);
+  }
+});
+
+// Endpoint to delete a daily report by report_id
+router.delete("/daily-report/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Delete sales associated with the daily report
+    await db.promise().query("DELETE FROM sales WHERE report_id = ?", [id]);
+
+    // Delete the daily report
+    const [result] = await db
+      .promise()
+      .query("DELETE FROM daily_report WHERE report_id = ?", [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+
+    res.status(200).json({ message: "Daily report deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting daily report:", error);
+    res.status(500).send({
+      message: "Failed to delete daily report",
+      error: error.message,
+    });
+  }
+});
+
+// Endpoint to update a daily report by report_id
+router.put("/daily-report/:id", async (req, res) => {
+  const { id } = req.params;
+  const { salesData, date } = req.body;
+
+  try {
+    // Get the original sales data to restore inventory stock
+    const [originalSales] = await db
+      .promise()
+      .query(
+        "SELECT inventory_id, quantity_sold FROM sales WHERE report_id = ?",
+        [id]
+      );
+
+    // Restore inventory stock
+    for (const sale of originalSales) {
+      await db
+        .promise()
+        .query(
+          "UPDATE inventory SET quantity = quantity + ? WHERE inventory_id = ?",
+          [sale.quantity_sold, sale.inventory_id]
+        );
+    }
+
+    // Delete existing sales for the report
+    await db.promise().query("DELETE FROM sales WHERE report_id = ?", [id]);
+
+    // Update the report's date
+    await db
+      .promise()
+      .query("UPDATE daily_report SET date = ? WHERE report_id = ?", [
+        date,
+        id,
+      ]);
+
+    // Insert the new sales data and update inventory
+    let totalItemsSold = 0;
+    let totalSales = 0;
+
+    for (const sale of salesData) {
+      const { inventory_id, quantity_sold, price } = sale;
+      const total_price = quantity_sold * price;
+      totalItemsSold += quantity_sold;
+      totalSales += total_price;
+
+      // Insert updated sales data
+      await db
+        .promise()
+        .query(
+          "INSERT INTO sales (report_id, inventory_id, quantity_sold, price, total_price) VALUES (?, ?, ?, ?, ?)",
+          [id, inventory_id, quantity_sold, price, total_price]
+        );
+
+      // Reduce inventory stock based on the new sales
+      await db
+        .promise()
+        .query(
+          "UPDATE inventory SET quantity = quantity - ? WHERE inventory_id = ?",
+          [quantity_sold, inventory_id]
+        );
+    }
+
+    // Update the daily report totals
+    await db
+      .promise()
+      .query(
+        "UPDATE daily_report SET total_cost = ?, total_items_sold = ? WHERE report_id = ?",
+        [totalSales, totalItemsSold, id]
+      );
+
+    res.status(200).json({ message: "Daily report updated successfully" });
+  } catch (error) {
+    console.error("Error updating daily report:", error);
+    res.status(500).send({
+      message: "Failed to update daily report",
+      error: error.message,
+    });
   }
 });
 
