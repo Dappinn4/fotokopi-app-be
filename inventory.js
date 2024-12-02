@@ -51,11 +51,18 @@ router.post("/inventory", (req, res) => {
 router.put("/inventory/:id", (req, res) => {
   const { id } = req.params;
   const { item_name, quantity, unit_price } = req.body;
+
+  if (!item_name || !quantity || !unit_price) {
+    return res.status(400).send("All fields are required");
+  }
+
   const query =
     "UPDATE inventory SET item_name = ?, quantity = ?, unit_price = ? WHERE inventory_id = ?";
   db.query(query, [item_name, quantity, unit_price, id], (err, results) => {
     if (err) {
       res.status(500).send(err);
+    } else if (results.affectedRows === 0) {
+      res.status(404).send("Item not found");
     } else {
       res.send("Item updated successfully");
     }
